@@ -1,23 +1,254 @@
-name: C/C++ CI
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#define STUDENTS_FILE "students.txt"
+#define CREDENTIALS_FILE "credentials.txt"
+struct Student {
+    int roll;
+    char name[50];
+    float marks;
+};
+char currentRole[20];
+char currentUser[50];
+void clearInput() {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF) {}
+}
+void logout() {
+    printf("Logging out...\n");
+    printf("Press any key to continue...\n");
+}
+void loadStudents(struct Student **arr, int *count) {
+    FILE *fp = fopen(STUDENTS_FILE, "r");
+    char line[200];
+    int roll;
+    char name[50];
+    float marks;
+    int cap = 10;
+    *arr = (struct Student*)malloc(sizeof(struct Student) * cap);
+    *count = 0;
+    if (!fp) return;
+    while (fgets(line, sizeof(line), fp)) {
+        if (line[0] == '\n' || line[0] == '\0') continue;
+        if (sscanf(line, "%d|%[^|]|%f", &roll, name, &marks) == 3) {
+            if (*count >= cap) {
+                cap *= 2;
+                *arr = (struct Student*)realloc(*arr, sizeof(struct Student) * cap);
+            }
+            (*arr)[*count].roll = roll;
+            strcpy((*arr)[*count].name, name);
+            (*arr)[*count].marks = marks;
+            (*count)++;
+        }
+    }
+    fclose(fp);
+}
+void saveStudents(struct Student *arr, int count) {
+    FILE *fp = fopen(STUDENTS_FILE, "w");
+    int i;
+    if (!fp) return;
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-jobs:
-  build:
-
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+    for (i = 0; i < count; i++) {
+        fprintf(fp, "%d|%s|%.2f\n", arr[i].roll, arr[i].name, arr[i].marks);
+    }
+    fclose(fp);
+}
+int loginSystem() {
+    char user[50], pass[50];
+    char fuser[50], fpass[50], frole[20];
+    FILE *fp;
+    printf("===== LOGIN =====\n");
+    printf("Username: ");
+    scanf("%49s", user);
+    clearInput();
+    printf("Password: ");
+    scanf("%49s", pass);
+    clearInput();
+    fp = fopen(CREDENTIALS_FILE, "r");
+    if (!fp) return 0;
+    while (fscanf(fp, "%49s %49s %19s", fuser, fpass, frole) == 3) {
+        if (strcmp(user, fuser) == 0 && strcmp(pass, fpass) == 0) {
+            strcpy(currentUser, user);
+            strcpy(currentRole, frole);
+            fclose(fp);
+            return 1;
+        }
+    }
+    fclose(fp);
+    return 0;
+}
+void addStudent() {
+    struct Student *arr;
+    int count;
+    struct Student s;
+    char buffer[50];
+    loadStudents(&arr, &count);
+    printf("Enter Roll: ");
+    fgets(buffer, sizeof(buffer), stdin);
+    sscanf(buffer, "%d", &s.roll);
+    printf("Enter Name: ");
+    fgets(s.name, sizeof(s.name), stdin);
+    s.name[strcspn(s.name, "\n")] = 0;
+    printf("Enter Marks: ");
+    fgets(buffer, sizeof(buffer), stdin);
+    sscanf(buffer, "%f", &s.marks);
+    arr = (struct Student*)realloc(arr, sizeof(struct Student) * (count + 1));
+    arr[count] = s;
+    count++;
+    saveStudents(arr, count);
+    free(arr);
+    printf("Student Added...\n");
+}
+void displayStudents() {
+    struct Student *arr;
+    int count, i;
+    loadStudents(&arr, &count);
+    if (count == 0) {
+        printf("No records...\n");
+        return;
+    }
+    for (i = 0; i < count; i++) {
+        printf("%d | %s | %.2f\n", arr[i].roll, arr[i].name, arr[i].marks);
+    }
+    free(arr);
+}
+void searchStudent() {
+    struct Student *arr;
+    int count, roll, i;
+    char buffer[50];
+    loadStudents(&arr, &count);
+    printf("Enter Roll to search: ");
+    fgets(buffer, sizeof(buffer), stdin);
+    sscanf(buffer, "%d", &roll);
+    for (i = 0; i < count; i++) {
+        if (arr[i].roll == roll) {
+            printf("%d | %s | %.2f\n", arr[i].roll, arr[i].name, arr[i].marks);
+            free(arr);
+            return;
+        }
+    }
+    printf("Not found...\n");
+    free(arr);
+}
+void updateStudent() {
+    struct Student *arr;
+    int count, roll, i;
+    char buffer[50];
+    loadStudents(&arr, &count);
+    printf("Enter Roll to update: ");
+    fgets(buffer, sizeof(buffer), stdin);
+    sscanf(buffer, "%d", &roll);
+    for (i = 0; i < count; i++) {
+        if (arr[i].roll == roll) {
+            printf("Enter New Name: ");
+            fgets(arr[i].name, sizeof(arr[i].name), stdin);
+            arr[i].name[strcspn(arr[i].name, "\n")] = 0;
+            printf("Enter New Marks: ");
+            fgets(buffer, sizeof(buffer), stdin);
+            sscanf(buffer, "%f", &arr[i].marks);
+            saveStudents(arr, count);
+            free(arr);
+            printf("Updated...\n");
+            return;
+        }
+    }
+    printf("Not found...\n");
+    free(arr);
+}
+void deleteStudent() {
+    struct Student *arr;
+    int count, roll, i, j;
+    char buffer[50];
+    loadStudents(&arr, &count);
+    printf("Enter Roll to delete: ");
+    fgets(buffer, sizeof(buffer), stdin);
+    sscanf(buffer, "%d", &roll);
+    for (i = 0; i < count; i++) {
+        if (arr[i].roll == roll) {
+            for (j = i; j < count - 1; j++) arr[j] = arr[j + 1];
+            count--;
+            saveStudents(arr, count);
+            free(arr);
+            printf("Deleted...\n");
+            return;
+        }
+    }
+    printf("Not found...\n");
+    free(arr);
+}
+void adminMenu() {
+    int choice;
+    char buf[10];
+    for (;;) {
+        printf("\n--- ADMIN MENU ---\n");
+        printf("1. Add Student\n");
+        printf("2. Display Students\n");
+        printf("3. Search Student\n");
+        printf("4. Update Student\n");
+        printf("5. Delete Student\n");
+        printf("6. Logout\n");
+        printf("Enter Choice = ");
+        fgets(buf, sizeof(buf), stdin);
+        choice = atoi(buf);
+        if (choice == 1) addStudent();
+        else if (choice == 2) displayStudents();
+        else if (choice == 3) searchStudent();
+        else if (choice == 4) updateStudent();
+        else if (choice == 5) deleteStudent();
+        else if (choice == 6) { logout(); return; }
+    }
+}
+void staffMenu() {
+    int choice;
+    char buf[10];
+    for (;;) {
+        printf("\n--- STAFF MENU ---\n");
+        printf("1. Display Students\n2. Update Student\n3. Search Student\n4. Logout\n");
+        printf("Enter Choice = ");
+        fgets(buf, sizeof(buf), stdin);
+        choice = atoi(buf);
+        if (choice == 1) displayStudents();
+        else if (choice == 2) updateStudent();
+        else if (choice == 3) searchStudent();
+        else if (choice == 4) { logout(); return; }
+    }
+}
+void guestMenu() {
+    int choice;
+    char buf[10];
+    for (;;) {
+        printf("\n--- GUEST MENU ---\n");
+        printf("1. Display Students\n2. Search Student\n3. Logout\n");
+        printf("Enter Choice = ");
+        fgets(buf, sizeof(buf), stdin);
+        choice = atoi(buf);
+        if (choice == 1) displayStudents();
+        else if (choice == 2) searchStudent();
+        else if (choice == 3) { logout(); return; }
+    }
+}
+void userMenu() {
+    int choice;
+    char buf[10];
+    for (;;) {
+        printf("\n--- USER MENU ---\n");
+        printf("1. Display Students\n2. Logout\n");
+        printf("Enter Choice = ");
+        fgets(buf, sizeof(buf), stdin);
+        choice = atoi(buf);
+        if (choice == 1) displayStudents();
+        else if (choice == 2) { logout(); return; }
+    }
+}
+int main() {
+    if (!loginSystem()) {
+        printf("Invalid credentials. Press any key to exit...");
+        getchar();
+        return 0;
+    }
+    if (strcmp(currentRole, "ADMIN") == 0) adminMenu();
+    else if (strcmp(currentRole, "STAFF") == 0) staffMenu();
+    else if (strcmp(currentRole, "GUEST") == 0) guestMenu();
+    else if (strcmp(currentRole, "USER") == 0) userMenu();
+    return 0;
+}
